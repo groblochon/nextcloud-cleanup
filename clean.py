@@ -54,8 +54,21 @@ def main():
     cursor_write = db_write.cursor()
 
     if args.scan_all:
-        logger.info("Mode SCAN-ALL : vérification de l'intégrité...")
-        query = "SELECT fileid, path, size, parent FROM oc_filecache WHERE mimetype != 2"
+        logger.info(f"Mode SCAN-ALL : identification du stockage S3 pour le bucket '{s3_bucket}'...")
+        # On cherche l'ID du stockage S3 en base de données
+        cursor_read.execute("SELECT numeric_id, id FROM oc_storages WHERE id LIKE %s", (f'object::store:s3:{s3_bucket}%',))
+        storage_info = cursor_read.fetchone()
+        
+        if not storage_info:
+            logger.error(f"Impossible de trouver un stockage Nextcloud correspondant au bucket '{s3_bucket}'.")
+            logger.info("Vérifiez vos variables d'environnement ou le contenu de votre table oc_storages.")
+            return
+
+        s3_storage_numeric_id = storage_info['numeric_id']
+        logger.info(f"Stockage S3 trouvé (ID: {storage_info['id']}, Numeric ID: {s3_storage_numeric_id})")
+
+        query = "SELECT fileid, path, size, parent FROM oc_filecache WHERE storage = %s AND mimetype != 2"
+        cursor_read.execute(query, (s3_storage_numeric_id,))
     else:
         logger.info("Mode UPLOADS : nettoyage des chargements temporaires...")
         query = f"""
