@@ -5,6 +5,8 @@ import argparse
 import boto3
 import mysql.connector
 from dotenv import load_dotenv
+import hashlib
+import base64
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -27,12 +29,68 @@ def get_db_connection():
         database=os.getenv('DATABASE_NAME')
     )
 
+def scan_s3_orphans(s3, s3_bucket, cursor_read, filename_pattern, dry_run):
+    """
+    Parcourt TOUS les objets S3 et supprime ceux dont le fileid
+    n'existe plus dans oc_filecache.
+    """
+    logger.info("Mode SCAN-S3-ORPHANS : listing de tous les objets S3...")
+
+    # Charger tous les fileids connus en DB dans un set (rapide à interroger)
+    logger.info("Chargement des fileids depuis oc_filecache...")
+    cursor_read.execute("SELECT fileid FROM oc_filecache")
+    known_ids = {row['fileid'] for row in cursor_read.fetchall()}
+    logger.info(f"  → {len(known_ids)} entrées DB chargées.")
+
+    paginator = s3.get_paginator('list_objects_v2')
+    pages = paginator.paginate(Bucket=s3_bucket)
+
+    total_scanned = 0
+    total_orphans = 0
+    size_recovered = 0
+    objects_to_delete = []
+
+    for page in pages:
+        for obj in page.get('Contents', []):
+            key = obj['Key']
+            total_scanned += 1
+
+            # On ne traite que les objets au format urn:oid:<int>
+            if not key.startswith('urn:oid:'):
+                continue
+            try:
+                fileid = int(key.split('urn:oid:')[1])
+            except ValueError:
+                continue
+
+            if fileid not in known_ids:
+                size = obj.get('Size', 0)
+                msg_prefix = "[DRY-RUN] " if dry_run else ""
+                logger.info(f"  - {msg_prefix}Orphelin S3 : {key} ({readable_bytes(size)})")
+                total_orphans += 1
+                size_recovered += size
+
+                if not dry_run:
+                    # Suppression par batch de 1000 (limite API S3)
+                    objects_to_delete.append({'Key': key})
+                    if len(objects_to_delete) >= 1000:
+                        s3.delete_objects(Bucket=s3_bucket, Delete={'Objects': objects_to_delete})
+                        objects_to_delete = []
+
+    # Vider le dernier batch
+    if not dry_run and objects_to_delete:
+        s3.delete_objects(Bucket=s3_bucket, Delete={'Objects': objects_to_delete})
+
+    logger.info(f"Scan terminé. {total_scanned} objets S3 analysés.")
+    logger.info(f"Orphelins trouvés : {total_orphans}. Espace récupérable : {readable_bytes(size_recovered)}.")
+
 def main():
     load_dotenv()
 
     parser = argparse.ArgumentParser(description='Nextcloud S3 Cleanup (Reliable Single-Threaded)')
     parser.add_argument('--dry-run', action='store_true', help='Simuler les suppressions')
     parser.add_argument('--scan-all', action='store_true', help='Vérifier l\'existence de TOUS les fichiers sur S3')
+    parser.add_argument('--scan-s3-orphans', action='store_true', help='Supprimer les objets S3 sans entrée DB')
     args = parser.parse_args()
 
     # Configuration
@@ -47,11 +105,27 @@ def main():
         aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
         aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
     )
+    
+    # Fix for missing Content-MD5 header in botocore DeleteObjects calls to some S3 providers
+    def add_content_md5(request, **kwargs):
+        if 'body' in request and request['body']:
+            md5 = hashlib.md5(request['body']).digest()
+            request['headers']['Content-MD5'] = base64.b64encode(md5).decode('utf-8')
+            
+    s3.meta.events.register('before-sign.s3.DeleteObjects', add_content_md5)
 
     db_read = get_db_connection()
     db_write = get_db_connection()
     cursor_read = db_read.cursor(dictionary=True, buffered=True)
     cursor_write = db_write.cursor()
+
+    if args.scan_s3_orphans:
+        scan_s3_orphans(s3, s3_bucket, cursor_read, filename_pattern, args.dry_run)
+        cursor_read.close()
+        cursor_write.close()
+        db_read.close()
+        db_write.close()
+        return
 
     if args.scan_all:
         logger.info(f"Mode SCAN-ALL : identification du stockage S3 pour le bucket '{s3_bucket}'...")
