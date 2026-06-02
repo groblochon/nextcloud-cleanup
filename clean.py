@@ -89,11 +89,11 @@ def main():
             try:
                 s3.head_object(Bucket=s3_bucket, Key=storage_filename)
             except s3.exceptions.ClientError as e:
-                if e.response['Error']['Code'] in ["404", "403"]:
+                if e.response['Error']['Code'] == "404":
                     is_missing = True
-            except Exception as e:
-                logger.error(f"Erreur S3 : {e}")
-                continue
+                else:
+                    logger.error(f"Erreur API S3 (autre que 404) pour {storage_filename}: {e}")
+                    continue
         else:
             is_missing = True # En mode upload, on veut supprimer de toute façon
 
