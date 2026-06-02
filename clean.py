@@ -82,10 +82,8 @@ def main():
             oc_storages s ON s.numeric_id = f.storage
         JOIN 
             oc_filecache p ON f.parent = p.fileid
-        JOIN 
-            oc_filecache u ON p.parent = u.fileid
         WHERE 
-            u.path = 'uploads'
+            p.parent IN (SELECT fileid FROM oc_filecache WHERE path = 'uploads')
             AND p.storage_mtime < UNIX_TIMESTAMP(NOW() - INTERVAL {deletion_grace_period} SECOND)
             AND s.available = 1;
     """
