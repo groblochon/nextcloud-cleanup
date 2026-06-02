@@ -101,6 +101,7 @@ def main():
     files_to_check = cursor.fetchall()
     logger.info(f"Traitement de {len(files_to_check)} fichiers...")
 
+    files_to_delete = []
     parent_objects = set()
     total_size = 0
     deleted_count = 0
@@ -118,8 +119,8 @@ def main():
                 s3.head_object(Bucket=s3_bucket, Key=storage_filename)
                 continue # Le fichier existe, on passe au suivant
             except s3.exceptions.ClientError as e:
-                if e.response['Error']['Code'] == "404":
-                    logger.warning(f" [!] Fichier MANQUANT sur S3 : {storage_filename} ({path})")
+                if e.response['Error']['Code'] in ["404", "403"]:
+                    logger.warning(f" [!] Fichier MANQUANT ou INACCESSIBLE sur S3 : {storage_filename} ({path})")
                 else:
                     logger.error(f"Erreur API S3 pour {storage_filename}: {e}")
                     continue
@@ -127,35 +128,44 @@ def main():
                 logger.error(f"Erreur inattendue pour {storage_filename}: {e}")
                 continue
         
-        # Action de suppression (soit parce que c'est un upload périmé, soit parce qu'il manque sur S3)
+        # Action de marquage pour suppression
         total_size += size
         if 'parent' in file:
             parent_objects.add(file['parent'])
+        
+        files_to_delete.append((fileid, storage_filename, path))
 
-        msg_prefix = "[DRY-RUN] " if args.dry_run else ""
-        logger.info(f" - {msg_prefix}Suppression de l'entrée DB pour {storage_filename} / {path}")
-
-        if not args.dry_run:
-            try:
-                if not args.scan_all:
-                    try:
-                        s3.delete_object(Bucket=s3_bucket, Key=storage_filename)
-                    except Exception as e:
-                        logger.error(f"Erreur suppression S3 {storage_filename}: {e}")
-
-                delete_query = "DELETE FROM `oc_filecache` WHERE `fileid` = %s"
-                cursor.execute(delete_query, (fileid,))
-                db.commit()
-                deleted_count += 1
-            except Exception as e:
-                logger.error(f"Erreur suppression DB {fileid}: {e}")
-
-    if not args.scan_all:
-        for parent_id in parent_objects:
+    # Phase de suppression réelle
+    if files_to_delete:
+        logger.info(f"Démarrage de la suppression de {len(files_to_delete)} entrées...")
+        for fileid, storage_filename, path in files_to_delete:
             msg_prefix = "[DRY-RUN] " if args.dry_run else ""
+            logger.info(f" - {msg_prefix}Suppression de {storage_filename} / {path}")
+
             if not args.dry_run:
-                cursor.execute("DELETE FROM `oc_filecache` WHERE `fileid` = %s", (parent_id,))
-                db.commit()
+                try:
+                    # En mode uploads (pas scan-all), on tente de supprimer sur S3 d'abord
+                    if not args.scan_all:
+                        try:
+                            s3.delete_object(Bucket=s3_bucket, Key=storage_filename)
+                        except Exception as e:
+                            logger.error(f"Erreur suppression S3 {storage_filename}: {e}")
+
+                    # Suppression de la base de données
+                    cursor.execute("DELETE FROM `oc_filecache` WHERE `fileid` = %s", (fileid,))
+                    deleted_count += 1
+                except Exception as e:
+                    logger.error(f"Erreur suppression DB {fileid}: {e}")
+        
+        if not args.dry_run:
+            db.commit()
+
+    # Nettoyage des dossiers parents (uniquement en mode uploads)
+    if not args.scan_all and parent_objects and not args.dry_run:
+        logger.info(f"Nettoyage de {len(parent_objects)} dossiers parents...")
+        for parent_id in parent_objects:
+            cursor.execute("DELETE FROM `oc_filecache` WHERE `fileid` = %s", (parent_id,))
+        db.commit()
 
     logger.info(f"Terminé. {deleted_count} entrées supprimées. {readable_bytes(total_size)} récupérés/nettoyés.")
 
