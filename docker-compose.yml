@@ -1,6 +1,7 @@
 services:
   cleanup:
     build: .
+    network_mode: host
     env_file: .env
     # Or specify environment variables directly:
     # environment:
