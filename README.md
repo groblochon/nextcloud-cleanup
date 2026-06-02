@@ -53,24 +53,22 @@ cp .env.example .env
    ```
 
 3. **Perform a full integrity scan**:
-   This is useful for fixing "Failed to read object" errors.
+   This is useful for fixing "Failed to read object" errors. It uses multi-threading to speed up S3 checks.
    ```bash
-   docker compose run --build cleanup --scan-all
+   docker compose run --build cleanup --scan-all --workers 50
    ```
 
-### Running Locally
+## Advanced Options
 
-Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--dry-run` | Simulate actions without deleting anything | `False` |
+| `--scan-all` | Verify existence of ALL files on S3 (slow) | `False` |
+| `--workers` | Number of parallel threads for S3 checks | `10` |
 
-Run the script:
-```bash
-python clean.py --scan-all --dry-run
-```
-
-## Troubleshooting
+## Performance & Reliability
+- **Multi-threaded**: The script uses a `ThreadPoolExecutor` to check multiple S3 objects in parallel, making full scans significantly faster.
+- **Single-Pass Deletion**: By using two separate database connections (one for reading, one for writing), the script can delete entries as soon as they are found to be missing. This means you don't lose progress if the script is interrupted.
 
 ### Connection Errors
 If you are running the database on the host machine and the container cannot reach it, the `docker-compose.yml` is configured with `network_mode: host` to allow easy LAN/Localhost access.
