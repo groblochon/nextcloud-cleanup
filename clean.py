@@ -74,15 +74,20 @@ def main():
     # Query to fetch files to delete
     # Note: Interval is handled slightly differently in SQL
     query = f"""
-        SELECT `oc_filecache`.`fileid`, `oc_filecache`.`path`, `oc_filecache`.`parent`, `oc_storages`.`id` AS `storage`, `oc_filecache`.`size`
-        FROM `oc_filecache`
-        LEFT JOIN `oc_storages` ON `oc_storages`.`numeric_id` = `oc_filecache`.`storage`
-        WHERE `oc_filecache`.`parent` IN (
-            SELECT `fileid`
-            FROM `oc_filecache`
-            WHERE `parent`=(SELECT fileid FROM `oc_filecache` WHERE `path`='uploads')
-            AND `storage_mtime` < UNIX_TIMESTAMP(NOW() - INTERVAL {deletion_grace_period} SECOND)
-        ) AND `oc_storages`.`available` = 1;
+        SELECT 
+            f.fileid, f.path, f.parent, s.id AS storage, f.size
+        FROM 
+            oc_filecache f
+        JOIN 
+            oc_storages s ON s.numeric_id = f.storage
+        JOIN 
+            oc_filecache p ON f.parent = p.fileid
+        JOIN 
+            oc_filecache u ON p.parent = u.fileid
+        WHERE 
+            u.path = 'uploads'
+            AND p.storage_mtime < UNIX_TIMESTAMP(NOW() - INTERVAL {deletion_grace_period} SECOND)
+            AND s.available = 1;
     """
 
     cursor.execute(query)
