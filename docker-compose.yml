@@ -1,0 +1,16 @@
+services:
+  cleanup:
+    build: .
+    env_file: .env
+    # Or specify environment variables directly:
+    # environment:
+    #   - DATABASE_HOST=db
+    #   - DATABASE_USER=nextcloud
+    #   - DATABASE_PASSWORD=secret
+    #   - DATABASE_NAME=nextcloud
+    #   - AWS_DEFAULT_REGION=us-east-1
+    #   - AWS_ENDPOINT=https://s3.example.com
+    #   - AWS_ACCESS_KEY_ID=key
+    #   - AWS_SECRET_ACCESS_KEY=secret
+    #   - AWS_BUCKET=nextcloud
+    #   - DELETION_GRACE_PERIOD=86400
