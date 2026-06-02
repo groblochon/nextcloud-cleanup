@@ -108,9 +108,12 @@ def main():
     
     # Fix for missing Content-MD5 header in botocore DeleteObjects calls to some S3 providers
     def add_content_md5(request, **kwargs):
-        if 'body' in request and request['body']:
-            md5 = hashlib.md5(request['body']).digest()
-            request['headers']['Content-MD5'] = base64.b64encode(md5).decode('utf-8')
+        if hasattr(request, 'body') and request.body:
+            body = request.body
+            if isinstance(body, str):
+                body = body.encode('utf-8')
+            md5 = hashlib.md5(body).digest()
+            request.headers['Content-MD5'] = base64.b64encode(md5).decode('utf-8')
             
     s3.meta.events.register('before-sign.s3.DeleteObjects', add_content_md5)
 
