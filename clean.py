@@ -67,7 +67,7 @@ def main():
             password=db_pass,
             database=db_name
         )
-        cursor = db.cursor(dictionary=True)
+        cursor = db.cursor(dictionary=True, buffered=True)
     except mysql.connector.Error as err:
         logger.error(f"Error connecting to database: {err}")
         return
