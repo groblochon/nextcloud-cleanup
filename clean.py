@@ -33,21 +33,47 @@ def main():
     deletion_grace_period = int(os.getenv('DELETION_GRACE_PERIOD', 24 * 60 * 60))
     filename_pattern = os.getenv('NEXTCLOUD_FILENAME_PATTERN', 'urn:oid:%d')
     
-    # ... (les variables de config restent les mêmes)
+    # DB configuration
+    db_host = os.getenv('DATABASE_HOST')
+    db_user = os.getenv('DATABASE_USER')
+    db_pass = os.getenv('DATABASE_PASSWORD')
+    db_name = os.getenv('DATABASE_NAME')
 
-    # ... (Instanciation clients S3 et DB reste la même)
+    # S3 configuration
+    s3_region = os.getenv('AWS_DEFAULT_REGION')
+    s3_endpoint = os.getenv('AWS_ENDPOINT')
+    s3_key = os.getenv('AWS_ACCESS_KEY_ID')
+    s3_secret = os.getenv('AWS_SECRET_ACCESS_KEY')
+    s3_bucket = os.getenv('AWS_BUCKET')
+
+    if not all([db_host, db_user, db_pass, db_name, s3_key, s3_secret, s3_bucket]):
+        logger.error("Missing required environment variables.")
+        return
+
+    # Instantiate S3 client
+    s3 = boto3.client(
+        's3',
+        region_name=s3_region,
+        endpoint_url=s3_endpoint,
+        aws_access_key_id=s3_key,
+        aws_secret_access_key=s3_secret
+    )
+
+    # Instantiate DB connection
+    try:
+        db = mysql.connector.connect(
+            host=db_host,
+            user=db_user,
+            password=db_pass,
+            database=db_name
+        )
+        cursor = db.cursor(dictionary=True)
+    except mysql.connector.Error as err:
+        logger.error(f"Error connecting to database: {err}")
+        return
 
     if args.scan_all:
         logger.info("Mode SCAN-ALL activé : vérification de l'intégrité de TOUS les fichiers sur S3...")
-        query = """
-            SELECT f.fileid, f.path, f.size, s.id AS storage
-            FROM oc_filecache f
-            JOIN oc_storages s ON s.numeric_id = f.storage
-            WHERE s.available = 1 AND f.size > 0 AND f.path NOT LIKE 'appdata_%';
-        """
-        # Note: on exclut appdata_% par défaut car il y en a beaucoup, 
-        # mais si l'utilisateur veut tout scanner, on peut enlever cette condition.
-        # Pour votre erreur spécifique sur appdata, je vais autoriser le scan complet.
         query = """
             SELECT f.fileid, f.path, f.size, s.id AS storage
             FROM oc_filecache f
@@ -111,15 +137,12 @@ def main():
 
         if not args.dry_run:
             try:
-                # Si on n'est PAS en mode scan-all, on supprime aussi sur S3 
-                # (car en scan-all, on sait déjà que le fichier n'y est pas)
                 if not args.scan_all:
                     try:
                         s3.delete_object(Bucket=s3_bucket, Key=storage_filename)
                     except Exception as e:
                         logger.error(f"Erreur suppression S3 {storage_filename}: {e}")
 
-                # Suppression de la base de données
                 delete_query = "DELETE FROM `oc_filecache` WHERE `fileid` = %s"
                 cursor.execute(delete_query, (fileid,))
                 db.commit()
@@ -127,7 +150,6 @@ def main():
             except Exception as e:
                 logger.error(f"Erreur suppression DB {fileid}: {e}")
 
-    # Nettoyage des dossiers parents (uniquement en mode uploads)
     if not args.scan_all:
         for parent_id in parent_objects:
             msg_prefix = "[DRY-RUN] " if args.dry_run else ""
@@ -136,9 +158,6 @@ def main():
                 db.commit()
 
     logger.info(f"Terminé. {deleted_count} entrées supprimées. {readable_bytes(total_size)} récupérés/nettoyés.")
-
-    cursor.close()
-    db.close()
 
     cursor.close()
     db.close()
