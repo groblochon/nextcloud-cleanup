@@ -47,10 +47,10 @@ async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
           if 'Failed to read object' in logs or 'timeout' in logs:
               print(f"Failed to read object {urn_oid} {logs}")
               return True
-          else:
-            if "does not exist" in logs:
-              print(f"does not exist {urn_oid} {logs}")
-              return False
+        else:
+          if "does not exist" in logs:
+            print(f"does not exist {urn_oid} {logs}")
+            return False
 
         return result
 
