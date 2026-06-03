@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Install system dependencies if any (none needed for standard mysql-connector-python)
 RUN apt-get update && apt-get install -y --no-install-recommends git-all \
-    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install
 COPY requirements.txt .
