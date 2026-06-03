@@ -66,7 +66,7 @@ def get_all_fileids(conn):
     return idrows
 
 async def process_task(fileid, path, conn, no_delete, sem, stats, total, s3_client, bucket):
-    print(f"process_task {fileid} {path}")
+    # print(f"process_task {fileid} {path}")
     is_ok = await test_object_via_s3(f"urn:oid:{fileid}", s3_client, bucket, sem)
 
     # Statistiques et affichage des logs de progression
