@@ -28,8 +28,25 @@ async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
             stderr=asyncio.subprocess.PIPE
         )
 
+        stdout, stderr = await process.communicate()
+
+        logs = ""
+        # Affichage des logs renvoyés par la commande occ
+        if stdout:
+          logs += stdout.decode().strip()
+          print(f"[LOG {urn_oid}] {logs}")
+        if stderr:
+          stderr_s = stderr.decode().strip()
+          logs += stderr_s
+          print(f"[ERR {urn_oid}] {stderr_s}")
         await process.wait()
         result = bool(process.returncode)
+        if not result:
+          # do not delete on error
+          if 'Failed to read object' in logs or 'timeout' in logs:
+              print(f"Failed to read object {urn_oid} {logs}")
+              return True
+
         print(f"test_object_via_oc_result {urn_oid} {result}")
         return result
 
@@ -102,7 +119,7 @@ async def main():
     # asyncio met 2 heures à allouer la mémoire RAM, et le processus devient silencieux et gèle ("bloqué").
     # La solution est le découpage en lots (Chunks) de quelques milliers !
 
-    sem = asyncio.Semaphore(4)
+    sem = asyncio.Semaphore(10)
     stats = {
         'checked': 0,
         'broken_count': 0,
