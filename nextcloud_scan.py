@@ -27,7 +27,7 @@ def patched_process(self, args, capture_output: bool = True, txt: bool = True) -
         args = [args]
     if self._output not in args:
         args.append(self._output)
-        
+
     cmd = ['sudo', '-u', WEB_USER, 'php', '--define', 'apc.enable_cli=1', f"{NC_PATH}/occ"] + args
     result = subprocess.run(args=cmd, capture_output=capture_output, text=True)
     return OccResponse(result)
@@ -38,12 +38,12 @@ def patched_occ_init(self, resp: subprocess.CompletedProcess):
         rsp = resp.stdout
     elif getattr(resp, 'stderr', None):
         rsp = resp.stderr
-        
+
     try:
         self.response = json.loads(rsp)
     except Exception:
         self.response = {"raw_output": rsp}
-        
+
     self.response_str = rsp
     self.cmd = resp.args[1] if len(resp.args) > 1 else ""
     self.rtype = type(self.response)
@@ -75,11 +75,12 @@ def get_all_fileids(conn):
 def test_object_via_occ(urn_oid):
     try:
         # Utilisation de lib_nc-occ via _process pour passer l'argument manquant
-        output = files_api.object.get(urn_oid)
-        print(output)
+        output = files_api._process(["files:object:info", urn_oid])
+        lower = output.response_str.lower()
+        print(lower)
 
-        if 'error' in output.lower() or 'not found' in output.lower() or \
-           'does not exist' in output.lower() or 'timeout' in output.lower():
+        if 'error' in lower or 'not found' in lower or \
+           'does not exist' in lower or 'timeout' in lower:
 
             return False
 
