@@ -41,7 +41,7 @@ async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
           print(f"[ERR {urn_oid}] {stderr_s}")
         await process.wait()
         result = bool(process.returncode)
-        print(f"test_object_via_oc_result {urn_oid} {result}")
+        print(f"test_object_via_oc_result {urn_oid} {result} {logs}")
         if not result:
           # do not delete on error
           if 'Failed to read object' in logs or 'timeout' in logs:
