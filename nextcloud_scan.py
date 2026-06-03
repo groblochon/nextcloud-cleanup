@@ -125,13 +125,6 @@ def main():
     print(f"Préfixe tables: {dbtable}")
     print(f"Utilisateur: {web_user}")
 
-    result = os.system(f"id -u {web_user} >/dev/null 2>&1")
-    if result != 0:
-        print(f"\n❌ Utilisateur '{web_user}' n'existe pas")
-        sys.exit(1)
-
-    print(f"✅ Utilisateur trouvé\n")
-
     conn = connect_db()
 
     try:
