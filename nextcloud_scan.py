@@ -31,7 +31,7 @@ async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
         stdout, stderr =  await process.communicate()
 
         logs = f"LOG {urn_oid} {stdout.decode().strip()} {stderr.decode().strip()}"
-        await asyncio.wait_for(process.wait(), timeout=20)
+        await process.wait()
         result = bool(process.returncode)
         print(f"test_object_via_oc_result {urn_oid} {result} {logs}")
         if not result:
