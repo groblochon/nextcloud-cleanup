@@ -72,12 +72,12 @@ def delete_from_db(conn, fileid):
 
 async def process_task(fileid, conn, no_delete, sem, stats):
     is_broken = await test_object_via_occ(f"urn:oid:{fileid}", sem)
-    
+
     # L'incrémentation sous asyncio.TaskGroup (mono-thread) est sûre
     stats['checked'] += 1
     checked = stats['checked']
     total = stats['total']
-    
+
     if checked % 50 == 0 or checked == 1:
         elapsed = time.time() - stats['start_time']
         rate = checked / (elapsed + 1)
@@ -91,6 +91,8 @@ async def process_task(fileid, conn, no_delete, sem, stats):
                 print(f"{fileid} deleted in db")
             else:
                 print(f"{fileid} NOT deleted in db")
+        else:
+          print(f"{fileid} NOT deleted in db")
 
 async def main():
     load_dotenv()
@@ -129,7 +131,7 @@ async def main():
         max_workers = 10 # Ajuster selon les capacités CPU/RAM du serveur
         print(f"🚀 Lancement de {max_workers} vérifications (TaskGroup / Asyncio)...")
         sem = asyncio.Semaphore(max_workers)
-        
+
         stats = {
             'checked': 0,
             'broken_count': 0,
@@ -141,7 +143,7 @@ async def main():
         async with asyncio.TaskGroup() as tg:
             for fileid in all_ids:
                 tg.create_task(process_task(fileid, conn, no_delete, sem, stats))
-                
+
         broken_count = stats['broken_count']
 
         print("=" * 80)
