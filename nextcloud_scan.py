@@ -102,13 +102,6 @@ def get_db_connection():
 def main():
     load_dotenv()
 
-    if len(sys.argv) < 2 or sys.argv[1].startswith('--'):
-        print("Usage: python3 nextcloud_scan.py <chemin_nextcloud> [--no-delete]")
-        print("\nExemple:")
-        print("  python3 nextcloud_scan.py /var/www/nextcloud")
-        print("  python3 nextcloud_scan.py /var/www/nextcloud --no-delete")
-        sys.exit(1)
-
     no_delete = '--no-delete' in sys.argv
     web_user = 'nextcloud'
 
