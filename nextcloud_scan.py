@@ -9,7 +9,7 @@ import os
 import sys
 import time
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
 
 import mysql.connector
 from dotenv import load_dotenv
@@ -39,20 +39,24 @@ def get_all_fileids(conn):
     cursor.close()
     return ids
 
-def test_object_via_occ(urn_oid):
-    try:
-        # Utilisation de lib_nc-occ via _process pour passer l'argument manquant
-        output = run(args=[*NEXTCLOUD_OCC, "files:object:info", urn_oid], capture_output=True, text=True)
-#        out = output.stdout + " " + output.stderr
-#        lower = out.lower()
-#        print(str(output.returncode) + " " + lower)
+async def test_object_via_occ(urn_oid, sem):
+    async with sem:
+        try:
+            # create_subprocess_exec gère le lancement asynchrone de la commande
+            process = await asyncio.create_subprocess_exec(
+                *NEXTCLOUD_OCC, "files:object:info", urn_oid,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            # On attend que la commande se termine
+            await process.communicate()
 
-        print(f"{urn_oid} str({output.returncode})")
-        return bool(output.returncode)
+            print(f"{urn_oid} str({process.returncode})")
+            return bool(process.returncode)
 
-    except Exception as e:
-        print(f"   ⚠️  Erreur test_object_via_occ {urn_oid}: {e}")
-        return False
+        except Exception as e:
+            print(f"   ⚠️  Erreur test_object_via_occ {urn_oid}: {e}")
+            return False
 
 def delete_from_db(conn, fileid):
     try:
@@ -66,7 +70,29 @@ def delete_from_db(conn, fileid):
         print(f"   ⚠️  Erreur DELETE DB {fileid}: {e}")
         return False
 
-def main():
+async def process_task(fileid, conn, no_delete, sem, stats):
+    is_broken = await test_object_via_occ(f"urn:oid:{fileid}", sem)
+    
+    # L'incrémentation sous asyncio.TaskGroup (mono-thread) est sûre
+    stats['checked'] += 1
+    checked = stats['checked']
+    total = stats['total']
+    
+    if checked % 50 == 0 or checked == 1:
+        elapsed = time.time() - stats['start_time']
+        rate = checked / (elapsed + 1)
+        remaining = (total - checked) / (rate + 1)
+        print(f"   [{checked}/{total}] {fileid} ~{remaining:.0f}s restantes")
+
+    if is_broken:
+        if not no_delete:
+            stats['broken_count'] += 1
+            if delete_from_db(conn, fileid):
+                print(f"{fileid} deleted in db")
+            else:
+                print(f"{fileid} NOT deleted in db")
+
+async def main():
     load_dotenv()
     no_delete = '--no-delete' in sys.argv
 
@@ -100,41 +126,23 @@ def main():
         print()
         print(f"Cela va prendre ~{total // 10}s (dépend de S3)...\n")
 
-        broken_count = 0
-        checked = 0
-        start_time = time.time()
-
         max_workers = 10 # Ajuster selon les capacités CPU/RAM du serveur
-        print(f"🚀 Lancement de {max_workers} vérifications en parallèle...")
+        print(f"🚀 Lancement de {max_workers} vérifications (TaskGroup / Asyncio)...")
+        sem = asyncio.Semaphore(max_workers)
+        
+        stats = {
+            'checked': 0,
+            'broken_count': 0,
+            'start_time': time.time(),
+            'total': total
+        }
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # On soumet toutes les tâches (via subprocess.run, gère bien le concurrent)
-            future_to_fileid = {
-                executor.submit(test_object_via_occ, f"urn:oid:{fileid}"): fileid 
-                for fileid in all_ids
-            }
-
-            # On traite les résultats au fur et à mesure qu'ils se terminent
-            for future in as_completed(future_to_fileid):
-                fileid = future_to_fileid[future]
-                checked += 1
-
-                if checked % 50 == 0 or checked == 1:
-                    elapsed = time.time() - start_time
-                    rate = checked / (elapsed + 1)
-                    remaining = (total - checked) / (rate + 1)
-                    print(f"   [{checked}/{total}] {fileid} ~{remaining:.0f}s restantes")
-
-                # future.result() récupère le False ou True du return de test_object_via_occ
-                if future.result():
-                  if not no_delete:
-
-                    broken_count += 1
-                    # Le DELETE DB reste sûr car exécuté sur le thread principal !
-                    if delete_from_db(conn, fileid):
-                      print(f"{fileid} deleted in db")
-                    else:
-                      print(f"{fileid} NOT deleted in db")
+        # Python >3.11 : asyncio.TaskGroup()
+        async with asyncio.TaskGroup() as tg:
+            for fileid in all_ids:
+                tg.create_task(process_task(fileid, conn, no_delete, sem, stats))
+                
+        broken_count = stats['broken_count']
 
         print("=" * 80)
         print("ÉTAPE 7: Nettoyage (occ files:scan)")
@@ -163,4 +171,4 @@ def main():
         conn.close()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
