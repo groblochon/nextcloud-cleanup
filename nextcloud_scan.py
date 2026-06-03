@@ -61,13 +61,13 @@ def delete_from_db(conn, fileid):
 
 def get_all_fileids(conn):
     cursor = conn.cursor()
-    cursor.execute("SELECT fileid FROM oc_filecache ORDER BY fileid ASC")
-    ids = [row[0] for row in cursor.fetchall()]
+    cursor.execute("SELECT fileid, path FROM oc_filecache ORDER BY fileid ASC")
+    idrows = [(row[0], row[1]) for row in cursor.fetchall()]
     cursor.close()
-    return ids
+    return idrows
 
-async def process_task(fileid, conn, no_delete, sem, stats, total):
-    print(f"process_task {fileid}")
+async def process_task(fileid, path, conn, no_delete, sem, stats, total):
+    print(f"process_task {fileid} {path}")
     is_ok = await test_object_via_occ(f"urn:oid:{fileid}", sem)
 
     # Statistiques et affichage des logs de progression
@@ -106,7 +106,7 @@ async def main():
     conn = connect_db()
 
     # Appel d'une fonction synchrone de manière asynchrone (pas de async with ici)
-    all_ids = get_all_fileids(conn)
+    idrows = get_all_fileids(conn)
     total = len(all_ids)
     print(f"✅ Récupéré {total} fileids")
 
@@ -115,7 +115,7 @@ async def main():
     # asyncio met 2 heures à allouer la mémoire RAM, et le processus devient silencieux et gèle ("bloqué").
     # La solution est le découpage en lots (Chunks) de quelques milliers !
 
-    sem = asyncio.Semaphore(2)
+    sem = asyncio.Semaphore(3)
     stats = {
         'checked': 0,
         'broken_count': 0,
@@ -124,10 +124,10 @@ async def main():
 
     chunk_size = 100
     for i in range(0, total, chunk_size):
-        chunk = all_ids[i:i+chunk_size]
-        print(f"process_task {i} / {chunk} / {total}")
+        chunk = idrows[i:i+chunk_size]
+        print(f"process_task {i} / {chunk[0]} / {chunk[1]} / {total}")
         # On lance 5000 vérifications maximum à la fois (dont 10 simultanément via Semaphore)
-        await asyncio.gather(*[process_task(fileid, conn, no_delete, sem, stats, total) for fileid in chunk])
+        await asyncio.gather(*[process_task(fileid, path, conn, no_delete, sem, stats, total) for (fileid, path) in chunk])
 
     print("📁 Rescan...")
     proc1 = await asyncio.create_subprocess_exec(*NEXTCLOUD_OCC, "files:scan", "--all")
