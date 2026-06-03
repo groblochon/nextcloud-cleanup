@@ -20,6 +20,8 @@ NC_PATH = '/var/www/nextcloud'
 WEB_USER = 'nextcloud'
 
 # --- MONKEY PATCH LIB_OCC ---
+import json
+
 def patched_process(self, args, capture_output: bool = True, txt: bool = True) -> OccResponse:
     if isinstance(args, str):
         args = [args]
@@ -30,7 +32,24 @@ def patched_process(self, args, capture_output: bool = True, txt: bool = True) -
     result = subprocess.run(args=cmd, capture_output=capture_output, text=True)
     return OccResponse(result)
 
+def patched_occ_init(self, resp: subprocess.CompletedProcess):
+    rsp = "{}"
+    if getattr(resp, 'stdout', None):
+        rsp = resp.stdout
+    elif getattr(resp, 'stderr', None):
+        rsp = resp.stderr
+        
+    try:
+        self.response = json.loads(rsp)
+    except Exception:
+        self.response = {"raw_output": rsp}
+        
+    self.response_str = rsp
+    self.cmd = resp.args[1] if len(resp.args) > 1 else ""
+    self.rtype = type(self.response)
+
 NCOcc._process = patched_process
+OccResponse.__init__ = patched_occ_init
 # ----------------------------
 
 files_api = nc_occ.Files()
