@@ -2,6 +2,7 @@ import asyncio
 import mysql.connector
 import os
 import sys
+import time
 from dotenv import load_dotenv
 from datetime import datetime
 
@@ -19,7 +20,6 @@ def connect_db():
 async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
     # Le semaphore protège le système pour ne pas lancer des millions de process occ d'un coup
     async with sem:
-        print(f"test_object_via_occ {urn_oid}")
         process = await asyncio.create_subprocess_exec(
             *NEXTCLOUD_OCC, "files:object:info", urn_oid,
             stdout=asyncio.subprocess.PIPE,
@@ -27,9 +27,7 @@ async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
         )
 
         await process.wait()
-        result = bool(process.returncode)
-        print(f"{urn_oid} str({result})")
-        return result
+        return bool(process.returncode)
 
 def delete_from_db(conn, fileid):
     try:
@@ -50,20 +48,28 @@ def get_all_fileids(conn):
     cursor.close()
     return ids
 
-async def process_task(fileid, conn, no_delete, sem):
-    # test_object est une coroutine. Il faut l'appeler avec "await" pour récupérer son retour.
-    # L'erreur de runtime venait de l'utilisation de `async with` sur des coroutines simples.
+async def process_task(fileid, conn, no_delete, sem, stats, total):
     is_broken = await test_object_via_occ(f"urn:oid:{fileid}", sem)
+    
+    # Statistiques et affichage des logs de progression 
+    stats['checked'] += 1
+    checked = stats['checked']
+    
+    if checked % 100 == 0 or checked == 1:
+        elapsed = time.time() - stats['start_time']
+        rate = checked / (elapsed + 1)
+        remaining = (total - checked) / (rate + 1)
+        print(f"   [{checked}/{total}] {fileid} ~{remaining:.0f}s restantes")
 
     if is_broken:
+        stats['broken_count'] += 1
         if not no_delete:
-            # delete_from_db est synchrone (def classique) car mysql.connector ne supporte pas l'asynchrone.
             if delete_from_db(conn, fileid):
-                print(f"{fileid} deleted in db")
+                print(f"✅ {fileid} supprimé de la DB")
             else:
-                print(f"{fileid} NOT deleted in db")
+                print(f"⚠️ {fileid} ECHEC suppression DB")
         else:
-            print(f"{fileid} NOT deleted in db")
+            print(f"👻 {fileid} fichier cassé trouvé (Omission, mode TEST)")
 
 
 async def main():
@@ -83,10 +89,23 @@ async def main():
     total = len(all_ids)
     print(f"✅ Récupéré {total} fileids")
 
-    # Il faut un verrou (Semaphore) sinon asyncio.gather va essayer de lancer un nombre illimité
-    # de processus système occ simultanément, ce qui va complètement paralyser le serveur RAM/CPU.
+    # MAJEUR : Tu as 642 000 fichiers.
+    # Si on construit une liste `[process_task(...) for ...]` avec 642 000 objets d'un coup,
+    # asyncio met 2 heures à allouer la mémoire RAM, et le processus devient silencieux et gèle ("bloqué").
+    # La solution est le découpage en lots (Chunks) de quelques milliers !
+    
     sem = asyncio.Semaphore(10)
-    await asyncio.gather(*[process_task(fileid, conn, no_delete, sem) for fileid in all_ids])
+    stats = {
+        'checked': 0,
+        'broken_count': 0,
+        'start_time': time.time()
+    }
+    
+    chunk_size = 5000
+    for i in range(0, total, chunk_size):
+        chunk = all_ids[i:i+chunk_size]
+        # On lance 5000 vérifications maximum à la fois (dont 10 simultanément via Semaphore)
+        await asyncio.gather(*[process_task(fileid, conn, no_delete, sem, stats, total) for fileid in chunk])
 
     print("📁 Rescan...")
     proc1 = await asyncio.create_subprocess_exec(*NEXTCLOUD_OCC, "files:scan", "--all")
