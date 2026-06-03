@@ -18,8 +18,10 @@ def connect_db():
     )
 
 async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
+    print(f"test_object_via_occ {urn_oid}")
     # Le semaphore protège le système pour ne pas lancer des millions de process occ d'un coup
     async with sem:
+        print(f"test_object_via_oc_sem {urn_oid}")
         process = await asyncio.create_subprocess_exec(
             *NEXTCLOUD_OCC, "files:object:info", urn_oid,
             stdout=asyncio.subprocess.PIPE,
@@ -30,6 +32,7 @@ async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
         return bool(process.returncode)
 
 def delete_from_db(conn, fileid):
+    print(f"delete_from_db {fileid}")
     try:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM oc_filecache WHERE fileid = %s", (fileid,))
@@ -49,12 +52,13 @@ def get_all_fileids(conn):
     return ids
 
 async def process_task(fileid, conn, no_delete, sem, stats, total):
+    print(f"process_task {fileid}")
     is_broken = await test_object_via_occ(f"urn:oid:{fileid}", sem)
-    
-    # Statistiques et affichage des logs de progression 
+
+    # Statistiques et affichage des logs de progression
     stats['checked'] += 1
     checked = stats['checked']
-    
+
     if checked % 100 == 0 or checked == 1:
         elapsed = time.time() - stats['start_time']
         rate = checked / (elapsed + 1)
@@ -93,17 +97,18 @@ async def main():
     # Si on construit une liste `[process_task(...) for ...]` avec 642 000 objets d'un coup,
     # asyncio met 2 heures à allouer la mémoire RAM, et le processus devient silencieux et gèle ("bloqué").
     # La solution est le découpage en lots (Chunks) de quelques milliers !
-    
-    sem = asyncio.Semaphore(10)
+
+    sem = asyncio.Semaphore(4)
     stats = {
         'checked': 0,
         'broken_count': 0,
         'start_time': time.time()
     }
-    
-    chunk_size = 5000
+
+    chunk_size = 100
     for i in range(0, total, chunk_size):
         chunk = all_ids[i:i+chunk_size]
+        print(f"process_task {i} / {chunk} / {total}")
         # On lance 5000 vérifications maximum à la fois (dont 10 simultanément via Semaphore)
         await asyncio.gather(*[process_task(fileid, conn, no_delete, sem, stats, total) for fileid in chunk])
 
@@ -118,5 +123,8 @@ async def main():
     print("🔧 Réparation...")
     proc3 = await asyncio.create_subprocess_exec(*NEXTCLOUD_OCC,"maintenance:repair")
     await proc3.wait() # Indispensable d'attendre la fin !
+
+    conn.commit()
+    conn.close()
 
 asyncio.run(main())
