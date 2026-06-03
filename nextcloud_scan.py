@@ -210,13 +210,13 @@ def main():
         print()
 
         print("📁 Rescan...")
-        run(args=[NEXTCLOUD_OCC, "files:scan", "--all"], capture_output=False, text=True)
+        run(args=[*NEXTCLOUD_OCC, "files:scan", "--all"], capture_output=False, text=True)
 
         print("📁 Rescan...")
-        run(args=[NEXTCLOUD_OCC, "files:scan-app-data"], capture_output=False, text=True)
+        run(args=[*NEXTCLOUD_OCC, "files:scan-app-data"], capture_output=False, text=True)
 
         print("🔧 Réparation...")
-        run(args=[NEXTCLOUD_OCC, "maintenance:repair"], capture_output=False, text=True)
+        run(args=[*NEXTCLOUD_OCC, "maintenance:repair"], capture_output=False, text=True)
 
         print()
         print("=" * 80)
