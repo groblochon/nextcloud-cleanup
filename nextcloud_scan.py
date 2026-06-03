@@ -47,10 +47,10 @@ def test_object_via_occ(urn_oid):
         )
 
         output = result.stdout + result.stderr
+        print(output)
+
         if 'error' in output.lower() or 'not found' in output.lower() or \
            'does not exist' in output.lower():
-
-            print(output)
 
             return False
 
