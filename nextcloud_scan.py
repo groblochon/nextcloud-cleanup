@@ -136,6 +136,7 @@ async def main():
         print(f"process_task {i} / {chunk} / {total}")
         # On lance 5000 vérifications maximum à la fois (dont 10 simultanément via Semaphore)
         await asyncio.gather(*[process_task(fileid, conn, no_delete, sem, stats, total) for fileid in chunk])
+        conn.commit()
 
     print("📁 Rescan...")
     proc1 = await asyncio.create_subprocess_exec(*NEXTCLOUD_OCC, "files:scan", "--all")
@@ -149,7 +150,6 @@ async def main():
     proc3 = await asyncio.create_subprocess_exec(*NEXTCLOUD_OCC,"maintenance:repair")
     await proc3.wait() # Indispensable d'attendre la fin !
 
-    conn.commit()
     conn.close()
 
 asyncio.run(main())
