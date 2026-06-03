@@ -39,10 +39,7 @@ def get_dbtable_prefix(config_path=None):
 
 def get_all_files(conn, dbtable):
     cursor = conn.cursor()
-    cursor.execute(f"""
-        SELECT id, path FROM {dbtable}filecache 
-        ORDER BY id ASC
-    """)
+    cursor.execute("SELECT fileid FROM oc_filecache")
     files = cursor.fetchall()
     cursor.close()
     return files
