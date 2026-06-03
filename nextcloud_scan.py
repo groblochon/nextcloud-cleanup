@@ -48,8 +48,9 @@ def test_object_via_occ(urn_oid):
 
         return True
 
-    except Exception:
-        return True
+    except Exception as e:
+        print(f"   ⚠️  Erreur test_object_via_occ {urn_oid}: {e}")
+        return False
 
 def delete_from_db(conn, fileid):
     try:
@@ -108,7 +109,7 @@ def main():
                 elapsed = time.time() - start_time
                 rate = checked / (elapsed + 1)
                 remaining = (total - checked) / (rate + 1)
-                print(f"   [{checked}/{total}] ~{remaining:.0f}s restantes")
+                print(f"   [{checked}/{total}] {fileid} ~{remaining:.0f}s restantes")
 
             if not test_object_via_occ(f"urn:oid:{fileid}"):
                 broken.append(fileid)
