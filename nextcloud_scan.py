@@ -29,7 +29,9 @@ async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
         )
 
         await process.wait()
-        return bool(process.returncode)
+        result = bool(process.returncode)
+        print(f"test_object_via_oc_result {urn_oid} {result}")
+        return result
 
 def delete_from_db(conn, fileid):
     print(f"delete_from_db {fileid}")
@@ -53,7 +55,7 @@ def get_all_fileids(conn):
 
 async def process_task(fileid, conn, no_delete, sem, stats, total):
     print(f"process_task {fileid}")
-    is_broken = await test_object_via_occ(f"urn:oid:{fileid}", sem)
+    is_ok = await test_object_via_occ(f"urn:oid:{fileid}", sem)
 
     # Statistiques et affichage des logs de progression
     stats['checked'] += 1
@@ -65,11 +67,13 @@ async def process_task(fileid, conn, no_delete, sem, stats, total):
         remaining = (total - checked) / (rate + 1)
         print(f"   [{checked}/{total}] {fileid} ~{remaining:.0f}s restantes")
 
-    if is_broken:
+    if is_ok:
+        print(f"✅")
+    else:
         stats['broken_count'] += 1
         if not no_delete:
             if delete_from_db(conn, fileid):
-                print(f"✅ {fileid} supprimé de la DB")
+                print(f"⚠️ {fileid} supprimé de la DB")
             else:
                 print(f"⚠️ {fileid} ECHEC suppression DB")
         else:
