@@ -38,8 +38,7 @@ def get_all_fileids(conn):
 def test_object_via_occ(urn_oid):
     try:
         # Utilisation de lib_nc-occ via _process pour passer l'argument manquant
-        res = files_api.object._process(['files:object:info', urn_oid])
-        output = res.response_str
+        output = files_api.object.get(urn_oid)
         print(output)
 
         if 'error' in output.lower() or 'not found' in output.lower() or \
