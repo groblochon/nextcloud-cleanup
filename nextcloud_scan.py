@@ -130,7 +130,7 @@ def main():
                 print(f"   [{checked}/{total}] {fileid} ~{remaining:.0f}s restantes")
 
             if not test_object_via_occ(f"urn:oid:{fileid}"):
-                broken.append(fileid)python
+                broken.append(fileid)
 
         elapsed = time.time() - start_time
         print()
