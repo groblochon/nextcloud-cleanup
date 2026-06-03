@@ -13,13 +13,30 @@ from datetime import datetime
 import mysql.connector
 from dotenv import load_dotenv
 from lib_occ import nc_occ
+from lib_occ.logic import NCOcc, OccResponse
+import subprocess
 
 NC_PATH = '/var/www/nextcloud'
 WEB_USER = 'nextcloud'
 
+# --- MONKEY PATCH LIB_OCC ---
+def patched_process(self, args, capture_output: bool = True, txt: bool = True) -> OccResponse:
+    if isinstance(args, str):
+        args = [args]
+    if self._output not in args:
+        args.append(self._output)
+        
+    cmd = ['sudo', '-u', WEB_USER, 'php', '--define', 'apc.enable_cli=1', f"{NC_PATH}/occ"] + args
+    result = subprocess.run(args=cmd, capture_output=capture_output, text=True)
+    return OccResponse(result)
+
+NCOcc._process = patched_process
+# ----------------------------
+
 files_api = nc_occ.Files()
-files_api._process(["scan", "--all"], False)
+files_api._process(["files:scan", "--all"], False)
 maintenance_api = nc_occ.Maintenance()
+
 
 def connect_db():
     return mysql.connector.connect(
@@ -113,7 +130,7 @@ def main():
                 print(f"   [{checked}/{total}] {fileid} ~{remaining:.0f}s restantes")
 
             if not test_object_via_occ(f"urn:oid:{fileid}"):
-                broken.append(fileid)
+                broken.append(fileid)python
 
         elapsed = time.time() - start_time
         print()
