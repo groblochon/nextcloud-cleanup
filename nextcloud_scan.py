@@ -107,7 +107,7 @@ async def main():
 
     # Appel d'une fonction synchrone de manière asynchrone (pas de async with ici)
     idrows = get_all_fileids(conn)
-    total = len(all_ids)
+    total = len(idrows)
     print(f"✅ Récupéré {total} fileids")
 
     # MAJEUR : Tu as 642 000 fichiers.
