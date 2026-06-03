@@ -1,4 +1,5 @@
 boto3
+mysql
 mysql-connector-python
 python-dotenv
 git+https://github.com/p3titpoe/lib_nc-occ.git
