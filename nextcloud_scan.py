@@ -150,7 +150,7 @@ def main():
         checked = 0
         start_time = time.time()
 
-        for obj_id, path in all_files:
+        for obj_id in all_files:
             checked += 1
 
             if checked % 50 == 0 or checked == 1:
@@ -162,7 +162,7 @@ def main():
             urn_oid = f"urn:oid:{obj_id}"
 
             if not test_object_via_occ(nextcloud_path, web_user, urn_oid):
-                broken.append((obj_id, path))
+                broken.append((obj_id))
 
         elapsed = time.time() - start_time
         print()
@@ -187,9 +187,8 @@ def main():
         print("Objets à supprimer:")
         print()
 
-        for obj_id, path in broken[:20]:
+        for obj_id in broken[:20]:
             print(f"   urn:oid:{obj_id}")
-            print(f"   Path: {path}\n")
 
         if broken_count > 20:
             print(f"   ... et {broken_count - 20} autres\n")
