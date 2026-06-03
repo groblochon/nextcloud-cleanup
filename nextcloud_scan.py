@@ -227,8 +227,8 @@ def main():
 
         backup_file = f"/tmp/deleted_objects_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
         with open(backup_file, 'w') as f:
-            for obj_id, path in broken:
-                f.write(f"urn:oid:{obj_id}|{path}\n")
+            for obj_id in broken:
+                f.write(f"urn:oid:{obj_id}")
 
         print(f"💾 {backup_file}")
         print()
@@ -241,7 +241,7 @@ def main():
         deleted = 0
         failed = 0
 
-        for i, (obj_id, path) in enumerate(broken, 1):
+        for i, obj_id in enumerate(broken, 1):
             urn_oid = f"urn:oid:{obj_id}"
 
             if i % 10 == 0 or i == 1 or i == broken_count:
