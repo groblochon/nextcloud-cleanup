@@ -18,7 +18,7 @@ NC_PATH = '/var/www/nextcloud'
 WEB_USER = 'nextcloud'
 
 files_api = nc_occ.Files()
-files_api.scan()
+files_api.scan("--all")
 maintenance_api = nc_occ.Maintenance()
 
 def connect_db():
