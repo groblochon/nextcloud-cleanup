@@ -39,16 +39,29 @@ def get_all_fileids(conn):
     cursor.close()
     return ids
 
-def test_object_via_occ(urn_oid):
-    try:
-        out = run(args=[*NEXTCLOUD_OCC, "files:object:info", urn_oid], capture_output=True, text=True)
+async def test_object_via_occ(urn_oid, sem):
+    async with sem:
+        try:
+            # create_subprocess_exec est NON-BLOQUANT. subprocess.run bloque la event loop entière !
+            process = await asyncio.create_subprocess_exec(
+                *NEXTCLOUD_OCC, "files:object:info", urn_oid,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            
+            # Affichage des logs renvoyés par la commande occ
+            if stdout:
+                print(f"[LOG {urn_oid}] {stdout.decode().strip()}")
+            if stderr:
+                print(f"[ERR {urn_oid}] {stderr.decode().strip()}")
 
-        print(f"{urn_oid} str({out.returncode})")
-        return bool(out.returncode)
+            print(f"{urn_oid} str({process.returncode})")
+            return bool(process.returncode)
 
-    except Exception as e:
-        print(f"   ⚠️  Erreur test_object_via_occ {urn_oid}: {e}")
-        return False
+        except Exception as e:
+            print(f"   ⚠️  Erreur test_object_via_occ {urn_oid}: {e}")
+            return False
 
 def delete_from_db(conn, fileid):
     try:
@@ -63,7 +76,7 @@ def delete_from_db(conn, fileid):
         return False
 
 async def process_task(fileid, conn, no_delete, sem, stats):
-    is_broken = test_object_via_occ(f"urn:oid:{fileid}")
+    is_broken = await test_object_via_occ(f"urn:oid:{fileid}", sem)
 
     # L'incrémentation sous asyncio.TaskGroup (mono-thread) est sûre
     stats['checked'] += 1
