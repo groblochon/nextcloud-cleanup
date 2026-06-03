@@ -28,7 +28,7 @@ async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
             stderr=asyncio.subprocess.PIPE
         )
 
-        stdout, stderr = await process.communicate()
+        stdout, stderr =  await asyncio.wait_for(process.communicate(), timeout=20)
 
         logs = ""
         # Affichage des logs renvoyés par la commande occ
@@ -37,9 +37,9 @@ async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
           print(f"[LOG {urn_oid}] {logs}")
         if stderr:
           stderr_s = stderr.decode().strip()
-          logs = f"{logs} {stderr_s})"
+          logs = f"{logs} {stderr_s}"
           print(f"[ERR {urn_oid}] {stderr_s}")
-        await process.wait()
+        await asyncio.wait_for(process.wait(), timeout=20)
         result = bool(process.returncode)
         print(f"test_object_via_oc_result {urn_oid} {result} {logs}")
         if not result:
