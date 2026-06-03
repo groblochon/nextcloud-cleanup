@@ -3,6 +3,8 @@ import mysql.connector
 import os
 import sys
 import time
+import boto3
+from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 from datetime import datetime
 
@@ -17,34 +19,31 @@ def connect_db():
         database=os.getenv('DATABASE_NAME')
     )
 
-async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
-    # print(f"test_object_via_occ {urn_oid}")
-    # Le semaphore protège le système pour ne pas lancer des millions de process occ d'un coup
+async def test_object_via_s3(urn_oid: str, s3_client, bucket: str, sem: asyncio.Semaphore):
+    print(f"test_object_via_s3 {urn_oid}")
+    # Le semaphore protège contre un trop grand nombre de requêtes simultanées à S3
     async with sem:
-        # print(f"test_object_via_oc_sem {urn_oid}")
-        process = await asyncio.create_subprocess_exec(
-            *NEXTCLOUD_OCC, "files:object:info", urn_oid,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-
-        stdout, stderr =  await process.communicate()
-
-        logs = f"LOG {urn_oid} {stdout.decode().strip()} {stderr.decode().strip()}"
-        await process.wait()
-        result = bool(process.returncode)
-        # print(f"test_object_via_oc_result {urn_oid} {result} {logs}")
-        if not result:
-          # do not delete on error
-          if 'Failed to read object' in logs or 'timeout' in logs:
-              # print(f"Failed to read object {urn_oid} {logs}")
-              return True
-        else:
-          if "does not exist" in logs:
-            # print(f"does not exist {urn_oid} {logs}")
-            return False
-
-        return True
+        print(f"test_object_via_s3_sem {urn_oid}")
+        try:
+            # Utilisation de asyncio.to_thread pour ne pas bloquer la boucle d'événements
+            # car boto3 est synchrone.
+            await asyncio.to_thread(
+                s3_client.head_object,
+                Bucket=bucket,
+                Key=urn_oid
+            )
+            return True
+        except ClientError as e:
+            # Code 404 signifie que l'objet est absent de S3
+            if e.response['Error']['Code'] == "404":
+                return False
+            # En cas d'autre erreur (connexion, auth), on considère que le fichier est OK
+            # pour éviter une suppression accidentelle en DB.
+            print(f"   ⚠️  Erreur S3 pour {urn_oid}: {e}")
+            return True
+        except Exception as e:
+            print(f"   ⚠️  Erreur inattendue S3 pour {urn_oid}: {e}")
+            return True
 
 def delete_from_db(conn, fileid):
     # print(f"delete_from_db {fileid}")
@@ -66,9 +65,9 @@ def get_all_fileids(conn):
     cursor.close()
     return idrows
 
-async def process_task(fileid, path, conn, no_delete, sem, stats, total):
-    # print(f"process_task {fileid} {path}")
-    is_ok = await test_object_via_occ(f"urn:oid:{fileid}", sem)
+async def process_task(fileid, path, conn, no_delete, sem, stats, total, s3_client, bucket):
+    print(f"process_task {fileid} {path}")
+    is_ok = await test_object_via_s3(f"urn:oid:{fileid}", s3_client, bucket, sem)
 
     # Statistiques et affichage des logs de progression
     stats['checked'] += 1
@@ -115,19 +114,29 @@ async def main():
     # asyncio met 2 heures à allouer la mémoire RAM, et le processus devient silencieux et gèle ("bloqué").
     # La solution est le découpage en lots (Chunks) de quelques milliers !
 
-    sem = asyncio.Semaphore(3)
+    # Initialisation Client S3
+    s3_client = boto3.client(
+        's3',
+        endpoint_url=os.getenv('AWS_ENDPOINT'),
+        aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
+        region_name=os.getenv('AWS_DEFAULT_REGION')
+    )
+    bucket = os.getenv('AWS_BUCKET')
+
+    # On peut augmenter le sémaphore maintenant qu'on ne lance plus de sous-processus lourds
+    sem = asyncio.Semaphore(50) 
     stats = {
         'checked': 0,
         'broken_count': 0,
         'start_time': time.time()
     }
 
-    chunk_size = 100
+    chunk_size = 500 # Chunks plus gros car plus performant
     for i in range(0, total, chunk_size):
         chunk = idrows[i:i+chunk_size]
-        print(f"✅ ✅ ✅ ✅ process_task {i} / {chunk[0]} / {chunk[1]} / {total}")
-        # On lance 5000 vérifications maximum à la fois (dont 10 simultanément via Semaphore)
-        await asyncio.gather(*[process_task(fileid, path, conn, no_delete, sem, stats, total) for (fileid, path) in chunk])
+        print(f"🚀 Traitement du lot {i} à {min(i+chunk_size, total)} / {total}")
+        await asyncio.gather(*[process_task(fileid, path, conn, no_delete, sem, stats, total, s3_client, bucket) for (fileid, path) in chunk])
 
     print("📁 Rescan...")
     proc1 = await asyncio.create_subprocess_exec(*NEXTCLOUD_OCC, "files:scan", "--all")
