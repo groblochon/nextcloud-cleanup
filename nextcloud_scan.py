@@ -20,10 +20,10 @@ def connect_db():
     )
 
 async def test_object_via_s3(urn_oid: str, s3_client, bucket: str, sem: asyncio.Semaphore):
-    print(f"test_object_via_s3 {urn_oid}")
+    # print(f"test_object_via_s3 {urn_oid}")
     # Le semaphore protège contre un trop grand nombre de requêtes simultanées à S3
     async with sem:
-        print(f"test_object_via_s3_sem {urn_oid}")
+        # print(f"test_object_via_s3_sem {urn_oid}")
         try:
             # Utilisation de asyncio.to_thread pour ne pas bloquer la boucle d'événements
             # car boto3 est synchrone.
