@@ -25,15 +25,11 @@ async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
-        
-        # IMPORTANT: il faut absolument "wait" ou "communicate" le process pour attendre sa fin !
-        # Sinon process.returncode sera 'None' et Python continuera immédiatement en croyant que 
-        # le fichier n'est pas cassé, ce qui laisse tourner occ en fantôme (zombie).
-        stdout, stderr = await process.communicate()
-        
-        returncode = process.returncode
-        print(f"{urn_oid} str({returncode})")
-        return bool(returncode)
+
+        await process.wait()
+        result = bool(process.returncode)
+        print(f"{urn_oid} str({result})")
+        return result
 
 def delete_from_db(conn, fileid):
     try:
@@ -87,7 +83,7 @@ async def main():
     total = len(all_ids)
     print(f"✅ Récupéré {total} fileids")
 
-    # Il faut un verrou (Semaphore) sinon asyncio.gather va essayer de lancer un nombre illimité 
+    # Il faut un verrou (Semaphore) sinon asyncio.gather va essayer de lancer un nombre illimité
     # de processus système occ simultanément, ce qui va complètement paralyser le serveur RAM/CPU.
     sem = asyncio.Semaphore(10)
     await asyncio.gather(*[process_task(fileid, conn, no_delete, sem) for fileid in all_ids])
