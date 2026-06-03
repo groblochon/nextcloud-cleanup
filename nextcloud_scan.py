@@ -132,7 +132,7 @@ async def main():
     }
 
     chunk_size = 300 # Chunks plus gros car plus performant
-    for i in range(0, total, chunk_size):
+    for i in range(0, total + 1, chunk_size):
         chunk = idrows[i:i+chunk_size]
         print(f"🚀 Traitement du lot {i} à {min(i+chunk_size, total)} / {total}")
         await asyncio.gather(*[process_task(fileid, path, conn, no_delete, sem, stats, total, s3_client, bucket) for (fileid, path) in chunk])
