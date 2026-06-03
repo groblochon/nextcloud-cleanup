@@ -125,14 +125,14 @@ async def main():
     bucket = os.getenv('AWS_BUCKET')
 
     # On peut augmenter le sémaphore maintenant qu'on ne lance plus de sous-processus lourds
-    sem = asyncio.Semaphore(50) 
+    sem = asyncio.Semaphore(20)
     stats = {
         'checked': 0,
         'broken_count': 0,
         'start_time': time.time()
     }
 
-    chunk_size = 500 # Chunks plus gros car plus performant
+    chunk_size = 100 # Chunks plus gros car plus performant
     for i in range(0, total, chunk_size):
         chunk = idrows[i:i+chunk_size]
         print(f"🚀 Traitement du lot {i} à {min(i+chunk_size, total)} / {total}")
