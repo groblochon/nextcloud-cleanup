@@ -49,8 +49,11 @@ def test_object_via_occ(urn_oid):
         if 'error' in lower or 'not found' in lower or \
            'does not exist' in lower or 'timeout' in lower:
 
+            print(urn_oid + " " + lower)
+
             return False
 
+        print(urn_oid + " ok")
         return True
 
     except Exception as e:
