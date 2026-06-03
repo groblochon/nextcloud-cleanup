@@ -47,7 +47,7 @@ def test_object_via_occ(urn_oid):
 #        lower = out.lower()
 #        print(str(output.returncode) + " " + lower)
 
-        print(f"{urn_oid} {output.returncode}")
+        print(f"{urn_oid} str({output.returncode})")
         return bool(output.returncode)
 
     except Exception as e:
