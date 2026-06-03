@@ -37,19 +37,19 @@ def get_dbtable_prefix(config_path=None):
             pass
     return 'oc_'
 
-def get_all_files(conn, dbtable):
+def get_all_files(conn):
     cursor = conn.cursor()
     cursor.execute("SELECT fileid FROM oc_filecache")
     files = cursor.fetchall()
     cursor.close()
     return files
 
-def test_object_via_occ(nextcloud_path, web_user, urn_oid):
+def test_object_via_occ(web_user, urn_oid):
     try:
         result = subprocess.run(
             [
                 'sudo', '-u', web_user, 'php',
-                f'{nextcloud_path}/occ',
+                '/var/www/nextcloud/occ',
                 '--define', 'apc.enable_cli=1',
                 'files:object:info',
                 urn_oid
@@ -72,12 +72,12 @@ def test_object_via_occ(nextcloud_path, web_user, urn_oid):
     except Exception:
         return True
 
-def delete_via_occ(nextcloud_path, web_user, urn_oid):
+def delete_via_occ(web_user, urn_oid):
     try:
         result = subprocess.run(
             [
                 'sudo', '-u', web_user, 'php',
-                f'{nextcloud_path}/occ',
+                '{/var/www/nextcloud/occ',
                 '--define', 'apc.enable_cli=1',
                 'files:object:delete',
                 urn_oid
@@ -91,6 +91,14 @@ def delete_via_occ(nextcloud_path, web_user, urn_oid):
     except:
         return False
 
+def get_db_connection():
+    return mysql.connector.connect(
+        host=os.getenv('DATABASE_HOST'),
+        user=os.getenv('DATABASE_USER'),
+        password=os.getenv('DATABASE_PASSWORD'),
+        database=os.getenv('DATABASE_NAME')
+    )
+
 def main():
     load_dotenv()
 
@@ -101,25 +109,16 @@ def main():
         print("  python3 nextcloud_scan.py /var/www/nextcloud --no-delete")
         sys.exit(1)
 
-    nextcloud_path = sys.argv[1]
     no_delete = '--no-delete' in sys.argv
     web_user = 'nextcloud'
-
-    config_path = os.path.join(nextcloud_path, 'config', 'config.php')
 
     print("=" * 80)
     print("🔍 SCAN ÉTENDU - TEST DE CHAQUE OBJET S3")
     print("=" * 80)
-    print(f"\nNextcloud: {nextcloud_path}")
     print(f"Mode: {'TEST SEULEMENT' if no_delete else 'SUPPRESSION ACTIVE'}")
     print(f"Heure: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
-    dbtable = get_dbtable_prefix(config_path if os.path.exists(config_path) else None)
-
-    print(f"Préfixe tables: {dbtable}")
-    print(f"Utilisateur: {web_user}")
-
-    conn = connect_db()
+    conn = get_db_connection()
 
     try:
         print("=" * 80)
@@ -127,7 +126,7 @@ def main():
         print("=" * 80)
         print()
 
-        all_files = get_all_files(conn, dbtable)
+        all_files = get_all_files(conn)
         total = len(all_files)
 
         print(f"✅ Récupéré {total} fichiers")
@@ -158,7 +157,7 @@ def main():
 
             urn_oid = f"urn:oid:{obj_id}"
 
-            if not test_object_via_occ(nextcloud_path, web_user, urn_oid):
+            if not test_object_via_occ(web_user, urn_oid):
                 broken.append((obj_id))
 
         elapsed = time.time() - start_time
@@ -197,7 +196,6 @@ def main():
             print(f"\n✅ Scan complété")
             print(f"   {broken_count} objet(s) SERAIENT supprimés")
             print(f"\nPour vraiment les supprimer:")
-            print(f"   python3 nextcloud_scan.py {nextcloud_path}")
             conn.close()
             return
 
@@ -244,7 +242,7 @@ def main():
             if i % 10 == 0 or i == 1 or i == broken_count:
                 print(f"Progression: {i}/{broken_count}")
 
-            if delete_via_occ(nextcloud_path, web_user, urn_oid):
+            if delete_via_occ(web_user, urn_oid):
                 deleted += 1
             else:
                 failed += 1
@@ -259,16 +257,16 @@ def main():
         print()
 
         print("🔒 Mode maintenance...")
-        os.system(f"sudo -u {web_user} php {nextcloud_path}/occ maintenance:mode --on >/dev/null 2>&1")
+        os.system(f"sudo -u {web_user} php /var/www/nextcloud/occ maintenance:mode --on >/dev/null 2>&1")
 
         print("📁 Rescan...")
-        os.system(f"sudo -u {web_user} php {nextcloud_path}/occ files:scan --all >/dev/null 2>&1")
+        os.system(f"sudo -u {web_user} php /var/www/nextcloud/occ files:scan --all >/dev/null 2>&1")
 
         print("🔧 Réparation...")
-        os.system(f"sudo -u {web_user} php {nextcloud_path}/occ maintenance:repair >/dev/null 2>&1")
+        os.system(f"sudo -u {web_user} php /var/www/nextcloud/occ maintenance:repair >/dev/null 2>&1")
 
         print("🔓 Mode normal...")
-        os.system(f"sudo -u {web_user} php {nextcloud_path}/occ maintenance:mode --off >/dev/null 2>&1")
+        os.system(f"sudo -u {web_user} php /var/www/nextcloud/occ maintenance:mode --off >/dev/null 2>&1")
 
         print()
         print("=" * 80)
