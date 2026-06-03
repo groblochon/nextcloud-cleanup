@@ -44,7 +44,7 @@ def test_object_via_occ(urn_oid):
         output = run(args=[*NEXTCLOUD_OCC, "files:object:info", urn_oid], capture_output=True, text=True)
         out = output.stdout + " " + output.stderr
         lower = out.lower()
-        print(lower)
+        print(str(output.returncode) + " " + lower)
 
         if 'error' in lower or 'not found' in lower or \
            'does not exist' in lower or 'timeout' in lower:
