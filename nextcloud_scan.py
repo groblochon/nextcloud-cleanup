@@ -18,10 +18,10 @@ def connect_db():
     )
 
 async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
-    print(f"test_object_via_occ {urn_oid}")
+    # print(f"test_object_via_occ {urn_oid}")
     # Le semaphore protège le système pour ne pas lancer des millions de process occ d'un coup
     async with sem:
-        print(f"test_object_via_oc_sem {urn_oid}")
+        # print(f"test_object_via_oc_sem {urn_oid}")
         process = await asyncio.create_subprocess_exec(
             *NEXTCLOUD_OCC, "files:object:info", urn_oid,
             stdout=asyncio.subprocess.PIPE,
@@ -33,21 +33,21 @@ async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
         logs = f"LOG {urn_oid} {stdout.decode().strip()} {stderr.decode().strip()}"
         await process.wait()
         result = bool(process.returncode)
-        print(f"test_object_via_oc_result {urn_oid} {result} {logs}")
+        # print(f"test_object_via_oc_result {urn_oid} {result} {logs}")
         if not result:
           # do not delete on error
           if 'Failed to read object' in logs or 'timeout' in logs:
-              print(f"Failed to read object {urn_oid} {logs}")
+              # print(f"Failed to read object {urn_oid} {logs}")
               return True
         else:
           if "does not exist" in logs:
-            print(f"does not exist {urn_oid} {logs}")
+            # print(f"does not exist {urn_oid} {logs}")
             return False
 
         return True
 
 def delete_from_db(conn, fileid):
-    print(f"delete_from_db {fileid}")
+    # print(f"delete_from_db {fileid}")
     try:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM oc_filecache WHERE fileid = %s", (fileid,))
@@ -67,7 +67,7 @@ def get_all_fileids(conn):
     return idrows
 
 async def process_task(fileid, path, conn, no_delete, sem, stats, total):
-    print(f"process_task {fileid} {path}")
+    # print(f"process_task {fileid} {path}")
     is_ok = await test_object_via_occ(f"urn:oid:{fileid}", sem)
 
     # Statistiques et affichage des logs de progression
@@ -78,19 +78,19 @@ async def process_task(fileid, path, conn, no_delete, sem, stats, total):
         elapsed = time.time() - stats['start_time']
         rate = checked / (elapsed + 1)
         remaining = (total - checked) / (rate + 1)
-        print(f"   [{checked}/{total}] {fileid} ~{remaining:.0f}s restantes")
+        # print(f"   [{checked}/{total}] {fileid} ~{remaining:.0f}s restantes")
 
     if is_ok:
-        print(f"✅ {fileid}")
+        print(f"✅ {fileid} {path}")
     else:
         stats['broken_count'] += 1
         if not no_delete:
             if delete_from_db(conn, fileid):
-                print(f"⚠️ {fileid} supprimé de la DB")
+                print(f"⚠️ {fileid} {path} supprimé de la DB")
             else:
-                print(f"⚠️ {fileid} ECHEC suppression DB")
+                print(f"⚠️ {fileid} {path} ECHEC suppression DB")
         else:
-            print(f"👻 {fileid} fichier cassé trouvé (Omission, mode TEST)")
+            print(f"👻 {fileid} {path} fichier cassé trouvé (Omission, mode TEST)")
 
 
 async def main():
@@ -125,7 +125,7 @@ async def main():
     chunk_size = 100
     for i in range(0, total, chunk_size):
         chunk = idrows[i:i+chunk_size]
-        print(f"process_task {i} / {chunk[0]} / {chunk[1]} / {total}")
+        print(f"✅ ✅ ✅ ✅ process_task {i} / {chunk[0]} / {chunk[1]} / {total}")
         # On lance 5000 vérifications maximum à la fois (dont 10 simultanément via Semaphore)
         await asyncio.gather(*[process_task(fileid, path, conn, no_delete, sem, stats, total) for (fileid, path) in chunk])
 
