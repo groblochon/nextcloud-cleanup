@@ -46,6 +46,9 @@ async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
           if 'Failed to read object' in logs or 'timeout' in logs:
               print(f"Failed to read object {urn_oid} {logs}")
               return True
+          else:
+            if "does not exist" in logs:
+              return False
 
         print(f"test_object_via_oc_result {urn_oid} {result}")
         return result
@@ -85,7 +88,7 @@ async def process_task(fileid, conn, no_delete, sem, stats, total):
         print(f"   [{checked}/{total}] {fileid} ~{remaining:.0f}s restantes")
 
     if is_ok:
-        print(f"✅")
+        print(f"✅ {fileid}")
     else:
         stats['broken_count'] += 1
         if not no_delete:
