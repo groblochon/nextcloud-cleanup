@@ -9,6 +9,7 @@ import os
 import sys
 import time
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import mysql.connector
 from dotenv import load_dotenv
@@ -46,7 +47,7 @@ def test_object_via_occ(urn_oid):
 #        lower = out.lower()
 #        print(str(output.returncode) + " " + lower)
 
-        print(urn_oid + " " + output.returncode)
+        print(f"{urn_oid} {output.returncode}")
         return bool(output.returncode)
 
     except Exception as e:
@@ -103,23 +104,37 @@ def main():
         checked = 0
         start_time = time.time()
 
-        for fileid in all_ids:
-            checked += 1
+        max_workers = 10 # Ajuster selon les capacités CPU/RAM du serveur
+        print(f"🚀 Lancement de {max_workers} vérifications en parallèle...")
 
-            if checked % 50 == 0 or checked == 1:
-                elapsed = time.time() - start_time
-                rate = checked / (elapsed + 1)
-                remaining = (total - checked) / (rate + 1)
-                print(f"   [{checked}/{total}] {fileid} ~{remaining:.0f}s restantes")
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # On soumet toutes les tâches (via subprocess.run, gère bien le concurrent)
+            future_to_fileid = {
+                executor.submit(test_object_via_occ, f"urn:oid:{fileid}"): fileid 
+                for fileid in all_ids
+            }
 
-            if test_object_via_occ(f"urn:oid:{fileid}"):
-              if not no_delete:
+            # On traite les résultats au fur et à mesure qu'ils se terminent
+            for future in as_completed(future_to_fileid):
+                fileid = future_to_fileid[future]
+                checked += 1
 
-                broken_count += 1
-                if delete_from_db(conn, fileid):
-                  print(f"{fileid} deleted in db")
-                else:
-                  print(f"{fileid} NOT deleted in db")
+                if checked % 50 == 0 or checked == 1:
+                    elapsed = time.time() - start_time
+                    rate = checked / (elapsed + 1)
+                    remaining = (total - checked) / (rate + 1)
+                    print(f"   [{checked}/{total}] {fileid} ~{remaining:.0f}s restantes")
+
+                # future.result() récupère le False ou True du return de test_object_via_occ
+                if future.result():
+                  if not no_delete:
+
+                    broken_count += 1
+                    # Le DELETE DB reste sûr car exécuté sur le thread principal !
+                    if delete_from_db(conn, fileid):
+                      print(f"{fileid} deleted in db")
+                    else:
+                      print(f"{fileid} NOT deleted in db")
 
         print("=" * 80)
         print("ÉTAPE 7: Nettoyage (occ files:scan)")
