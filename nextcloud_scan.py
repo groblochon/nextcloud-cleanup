@@ -19,6 +19,7 @@ def connect_db():
 async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
     # Le semaphore protège le système pour ne pas lancer des millions de process occ d'un coup
     async with sem:
+        print(f"test_object_via_occ {urn_oid}")
         process = await asyncio.create_subprocess_exec(
             *NEXTCLOUD_OCC, "files:object:info", urn_oid,
             stdout=asyncio.subprocess.PIPE,
