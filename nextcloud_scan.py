@@ -12,50 +12,16 @@ from datetime import datetime
 
 import mysql.connector
 from dotenv import load_dotenv
-from lib_occ import nc_occ
-from lib_occ.logic import NCOcc, OccResponse
-import subprocess
+from subprocess import run
 
 NC_PATH = '/var/www/nextcloud'
 WEB_USER = 'nextcloud'
+NEXTCLOUD_OCC = "sudo -u nextcloud php --define apc.enable_cli=1 /var/www/nextcloud/occ"
 
 # --- MONKEY PATCH LIB_OCC ---
 import json
 
-def patched_process(self, args, capture_output: bool = True, txt: bool = True) -> OccResponse:
-    if isinstance(args, str):
-        args = [args]
-    if self._output not in args:
-        args.append(self._output)
-
-    cmd = ['sudo', '-u', WEB_USER, 'php', '--define', 'apc.enable_cli=1', f"{NC_PATH}/occ"] + args
-    result = subprocess.run(args=cmd, capture_output=capture_output, text=True)
-    return OccResponse(result)
-
-def patched_occ_init(self, resp: subprocess.CompletedProcess):
-    rsp = "{}"
-    if getattr(resp, 'stdout', None):
-        rsp = resp.stdout
-    elif getattr(resp, 'stderr', None):
-        rsp = resp.stderr
-
-    try:
-        self.response = json.loads(rsp)
-    except Exception:
-        self.response = {"raw_output": rsp}
-
-    self.response_str = rsp
-    self.cmd = resp.args[1] if len(resp.args) > 1 else ""
-    self.rtype = type(self.response)
-
-NCOcc._process = patched_process
-OccResponse.__init__ = patched_occ_init
 # ----------------------------
-
-files_api = nc_occ.Files()
-files_api._process(["files:scan", "--all"], False)
-maintenance_api = nc_occ.Maintenance()
-
 
 def connect_db():
     return mysql.connector.connect(
@@ -75,8 +41,9 @@ def get_all_fileids(conn):
 def test_object_via_occ(urn_oid):
     try:
         # Utilisation de lib_nc-occ via _process pour passer l'argument manquant
-        output = files_api._process(["files:object:get", urn_oid], False)
-        lower = output.response_str.lower()
+        output = run(args=[NEXTCLOUD_OCC, "files:object:get"], capture_output=True, text=True)
+        out = output.stdout + " " + output.stderr
+        lower = out.lower()
         print(lower)
 
         if 'error' in lower or 'not found' in lower or \
@@ -243,13 +210,13 @@ def main():
         print()
 
         print("📁 Rescan...")
-        files_api.scan()
+        run(args=[NEXTCLOUD_OCC, "files:scan", "--all"], capture_output=False, text=True)
 
         print("📁 Rescan...")
-        files_api.scan_app_data()
+        run(args=[NEXTCLOUD_OCC, "files:scan-app-data"], capture_output=False, text=True)
 
         print("🔧 Réparation...")
-        maintenance_api.repair()
+        run(args=[NEXTCLOUD_OCC, "maintenance:repair"], capture_output=False, text=True)
 
         print()
         print("=" * 80)
