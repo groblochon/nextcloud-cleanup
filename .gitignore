@@ -4,3 +4,6 @@ vendor
 /.idea/modules.xml
 /.idea/nextcloud-cleanup.iml
 /.idea/vcs.xml
+/venv/
+/.venv/
+/.idea/misc.xml

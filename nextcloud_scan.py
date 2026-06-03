@@ -5,61 +5,20 @@ Utilise: occ files:object:info pour chaque urn:oid:ID
 Supprime de la DB si l'objet S3 n'existe plus
 """
 
-import mysql.connector
-import sys
 import os
-import subprocess
+import sys
 import time
-import json
 from datetime import datetime
+
+import mysql.connector
 from dotenv import load_dotenv
 from lib_occ import nc_occ
-from lib_occ.logic import NCOcc
 
 NC_PATH = '/var/www/nextcloud'
 WEB_USER = 'nextcloud'
 
-# Appliquer le patch pour lib_nc-occ et l'importer
-def init_nc_occ():
-    
-    def patched_process(self, args, capture_output=True, txt=True, timeout=10):
-        if isinstance(args, str):
-            args = [args]
-        
-        patched_arg = ['sudo', '-u', WEB_USER, 'php', '--define', 'apc.enable_cli=1', f'{NC_PATH}/occ']
-        if self._output not in args:
-            args.append(self._output)
-        patched_arg.extend(args)
-
-        try:
-            result = subprocess.run(args=patched_arg, capture_output=capture_output, text=True, timeout=timeout)
-        except subprocess.TimeoutExpired:
-            result = subprocess.CompletedProcess(args=patched_arg, returncode=-1, stdout="timeout", stderr="")
-            
-        rsp = result.stderr if result.stdout == "" else result.stdout
-        class SafeResponse:
-            def __init__(self, rsp_str, cmd):
-                self.response_str = rsp_str
-                self.cmd = cmd
-                try:
-                    self.response = json.loads(rsp_str)
-                    self.rtype = type(self.response)
-                except json.JSONDecodeError:
-                    self.response = {"raw": rsp_str}
-                    self.rtype = dict
-                    
-            def __str__(self):
-                return str(self.response_str)
-                
-        return SafeResponse(rsp, patched_arg[6] if len(patched_arg) > 6 else "")
-
-    NCOcc._process = patched_process
-    return nc_occ
-
-nc_occ = init_nc_occ()
 files_api = nc_occ.Files()
 maintenance_api = nc_occ.Maintenance()
-
 
 def connect_db():
     return mysql.connector.connect(
@@ -79,7 +38,7 @@ def get_all_fileids(conn):
 def test_object_via_occ(urn_oid):
     try:
         # Utilisation de lib_nc-occ via _process pour passer l'argument manquant
-        res = files_api.object._process(['files:object:info', urn_oid], timeout=10)
+        res = files_api.object._process(['files:object:info', urn_oid])
         output = res.response_str
         print(output)
 
@@ -246,10 +205,13 @@ def main():
         print()
 
         print("📁 Rescan...")
-        files_api._process(['files:scan', '--all'], timeout=300)
+        files_api.scan()
+
+        print("📁 Rescan...")
+        files_api.scan_app_data()
 
         print("🔧 Réparation...")
-        maintenance_api._process(['maintenance:repair'], timeout=300)
+        maintenance_api.repair()
 
         print()
         print("=" * 80)
