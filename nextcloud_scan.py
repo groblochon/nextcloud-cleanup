@@ -33,14 +33,15 @@ async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
         logs = ""
         # Affichage des logs renvoyés par la commande occ
         if stdout:
-          logs += stdout.decode().strip()
+          logs = stdout.decode().strip()
           print(f"[LOG {urn_oid}] {logs}")
         if stderr:
           stderr_s = stderr.decode().strip()
-          logs += stderr_s
+          logs = f"{logs} {stderr_s})"
           print(f"[ERR {urn_oid}] {stderr_s}")
         await process.wait()
         result = bool(process.returncode)
+        print(f"test_object_via_oc_result {urn_oid} {result}")
         if not result:
           # do not delete on error
           if 'Failed to read object' in logs or 'timeout' in logs:
@@ -48,9 +49,9 @@ async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
               return True
           else:
             if "does not exist" in logs:
+              print(f"does not exist {urn_oid} {logs}")
               return False
 
-        print(f"test_object_via_oc_result {urn_oid} {result}")
         return result
 
 def delete_from_db(conn, fileid):
