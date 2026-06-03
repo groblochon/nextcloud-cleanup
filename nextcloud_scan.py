@@ -115,7 +115,7 @@ async def main():
     # asyncio met 2 heures à allouer la mémoire RAM, et le processus devient silencieux et gèle ("bloqué").
     # La solution est le découpage en lots (Chunks) de quelques milliers !
 
-    sem = asyncio.Semaphore(10)
+    sem = asyncio.Semaphore(4)
     stats = {
         'checked': 0,
         'broken_count': 0,
