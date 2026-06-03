@@ -46,9 +46,6 @@ def test_object_via_occ(urn_oid):
             text=True
         )
 
-        if result.returncode == 0:
-            return True
-
         output = result.stdout + result.stderr
         if 'error' in output.lower() or 'not found' in output.lower() or \
            'does not exist' in output.lower():
