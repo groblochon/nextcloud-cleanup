@@ -39,24 +39,16 @@ def get_all_fileids(conn):
     cursor.close()
     return ids
 
-async def test_object_via_occ(urn_oid, sem):
-    async with sem:
-        try:
-            # create_subprocess_exec gère le lancement asynchrone de la commande
-            process = await asyncio.create_subprocess_exec(
-                *NEXTCLOUD_OCC, "files:object:info", urn_oid,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            # On attend que la commande se termine
-            await process.communicate()
+def test_object_via_occ(urn_oid):
+    try:
+        out = run(args=[*NEXTCLOUD_OCC, "files:object:info", urn_oid], capture_output=True, text=True)
 
-            print(f"{urn_oid} str({process.returncode})")
-            return bool(process.returncode)
+        print(f"{urn_oid} str({out.returncode})")
+        return bool(out.returncode)
 
-        except Exception as e:
-            print(f"   ⚠️  Erreur test_object_via_occ {urn_oid}: {e}")
-            return False
+    except Exception as e:
+        print(f"   ⚠️  Erreur test_object_via_occ {urn_oid}: {e}")
+        return False
 
 def delete_from_db(conn, fileid):
     try:
@@ -71,7 +63,7 @@ def delete_from_db(conn, fileid):
         return False
 
 async def process_task(fileid, conn, no_delete, sem, stats):
-    is_broken = await test_object_via_occ(f"urn:oid:{fileid}", sem)
+    is_broken = test_object_via_occ(f"urn:oid:{fileid}")
 
     # L'incrémentation sous asyncio.TaskGroup (mono-thread) est sûre
     stats['checked'] += 1
