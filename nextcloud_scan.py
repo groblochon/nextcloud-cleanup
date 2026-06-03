@@ -41,7 +41,7 @@ def get_all_fileids(conn):
 def test_object_via_occ(urn_oid):
     try:
         # Utilisation de lib_nc-occ via _process pour passer l'argument manquant
-        output = run(args=[*NEXTCLOUD_OCC, "files:object:get", urn_oid], capture_output=True, text=True)
+        output = run(args=[*NEXTCLOUD_OCC, "files:object:info", urn_oid], capture_output=True, text=True)
         out = output.stdout + " " + output.stderr
         lower = out.lower()
         print(lower)
