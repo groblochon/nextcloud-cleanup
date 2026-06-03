@@ -5,8 +5,8 @@ LABEL maintainer="Alexander Graf <alex@otherguy.io>"
 WORKDIR /app
 
 # Install system dependencies if any (none needed for standard mysql-connector-python)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/* && apt-get install -y git
+RUN apt-get update && apt-get install -y --no-install-recommends git-all \
+    && rm -rf /var/lib/apt/lists/* \
 
 # Copy requirements and install
 COPY requirements.txt .
