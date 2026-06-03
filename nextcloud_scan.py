@@ -42,19 +42,12 @@ def test_object_via_occ(urn_oid):
     try:
         # Utilisation de lib_nc-occ via _process pour passer l'argument manquant
         output = run(args=[*NEXTCLOUD_OCC, "files:object:info", urn_oid], capture_output=True, text=True)
-        out = output.stdout + " " + output.stderr
-        lower = out.lower()
-        print(str(output.returncode) + " " + lower)
+#        out = output.stdout + " " + output.stderr
+#        lower = out.lower()
+#        print(str(output.returncode) + " " + lower)
 
-        if 'error' in lower or 'not found' in lower or \
-           'does not exist' in lower or 'timeout' in lower:
-
-            print(urn_oid + " " + lower)
-
-            return False
-
-        print(urn_oid + " ok")
-        return True
+        print(urn_oid + " " + output.returncode)
+        return bool(output.returncode)
 
     except Exception as e:
         print(f"   ⚠️  Erreur test_object_via_occ {urn_oid}: {e}")
@@ -106,7 +99,7 @@ def main():
         print()
         print(f"Cela va prendre ~{total // 10}s (dépend de S3)...\n")
 
-        broken = []
+        broken_count = 0
         checked = 0
         start_time = time.time()
 
@@ -119,93 +112,14 @@ def main():
                 remaining = (total - checked) / (rate + 1)
                 print(f"   [{checked}/{total}] {fileid} ~{remaining:.0f}s restantes")
 
-            if not test_object_via_occ(f"urn:oid:{fileid}"):
-                broken.append(fileid)
+            if test_object_via_occ(f"urn:oid:{fileid}"):
+              if not no_delete:
 
-        elapsed = time.time() - start_time
-        print()
-        print(f"✅ Scan complété en {elapsed:.0f}s")
-        print()
-
-        print("=" * 80)
-        print("ÉTAPE 3: Résultats")
-        print("=" * 80)
-        print()
-
-        broken_count = len(broken)
-
-        if broken_count == 0:
-            print("🎉 Aucun objet cassé trouvé!")
-            print(f"Tous les {total} fichiers sont accessibles.")
-            return
-
-        print(f"❌ Trouvé {broken_count} objet(s) cassé(s) sur {total}")
-        print()
-        print("Objets à supprimer:")
-        print()
-
-        for fileid in broken[:20]:
-            print(f"   urn:oid:{fileid}")
-
-        if broken_count > 20:
-            print(f"   ... et {broken_count - 20} autres\n")
-
-        if no_delete:
-            print("=" * 80)
-            print("MODE TEST: Pas de suppression")
-            print("=" * 80)
-            print(f"\n✅ Scan complété")
-            print(f"   {broken_count} entrée(s) SERAIENT supprimées de la DB")
-            print(f"\nPour vraiment supprimer:")
-            print(f"   python3 nextcloud_scan.py")
-            return
-
-        print("=" * 80)
-        print("ÉTAPE 4: Confirmation")
-        print("=" * 80)
-        print()
-        print(f"⚠️  Attention: Cela va supprimer {broken_count} entrée(s) de oc_filecache")
-        print("\nTapez 'SUPPRIMER TOUT':")
-
-        confirm = input()
-        if confirm != "SUPPRIMER TOUT":
-            print("\n❌ Annulé")
-            return
-        print()
-
-        print("=" * 80)
-        print("ÉTAPE 5: Sauvegarde")
-        print("=" * 80)
-        print()
-
-        backup_file = f"/tmp/deleted_objects_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        with open(backup_file, 'w') as f:
-            for fileid in broken:
-                f.write(f"urn:oid:{fileid}\n")
-
-        print(f"💾 {backup_file}")
-        print()
-
-        print("=" * 80)
-        print("ÉTAPE 6: Suppression des entrées DB")
-        print("=" * 80)
-        print()
-
-        deleted = 0
-        failed = 0
-
-        for i, fileid in enumerate(broken, 1):
-            if i % 10 == 0 or i == 1 or i == broken_count:
-                print(f"Progression: {i}/{broken_count}")
-
-            if delete_from_db(conn, fileid):
-                deleted += 1
-            else:
-                failed += 1
-
-        print()
-        print(f"✅ {deleted} supprimés, {failed} échoués")
-        print()
+                broken_count += 1
+                if delete_from_db(conn, fileid):
+                  print(f"{fileid} deleted in db")
+                else:
+                  print(f"{fileid} NOT deleted in db")
 
         print("=" * 80)
         print("ÉTAPE 7: Nettoyage (occ files:scan)")
@@ -229,9 +143,6 @@ def main():
         print(f"📊 Résumé:")
         print(f"   • Total: {total}")
         print(f"   • Cassés (S3 introuvable): {broken_count}")
-        print(f"   • Supprimés de la DB: {deleted}")
-        print(f"   • Échoués: {failed}")
-        print(f"   • Sauvegarde: {backup_file}")
 
     finally:
         conn.close()
