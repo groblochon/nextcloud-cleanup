@@ -44,7 +44,7 @@ async def test_object_via_occ(urn_oid: str, sem: asyncio.Semaphore):
             print(f"does not exist {urn_oid} {logs}")
             return False
 
-        return result
+        return True
 
 def delete_from_db(conn, fileid):
     print(f"delete_from_db {fileid}")
