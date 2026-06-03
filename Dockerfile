@@ -10,7 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements and install
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN 
+
 
 # Copy the script
 COPY clean.py .
@@ -22,13 +23,13 @@ ARG BUILD_DATE=""
 ARG VERSION="${VCS_REF}"
 
 LABEL org.label-schema.schema-version="1.0" \
-      org.label-schema.name="nextcloud-cleanup" \
-      org.label-schema.vendor="otherguy" \
-      org.label-schema.version="${VERSION}" \
-      org.label-schema.build-date="${BUILD_DATE}" \
-      org.label-schema.description="Cleans up files on Nextcloud S3 storage that are left over from canceled uploads." \
-      org.label-schema.vcs-url="https://github.com/otherguy/nextcloud-cleanup" \
-      org.label-schema.vcs-ref="${VCS_REF}"
+    org.label-schema.name="nextcloud-cleanup" \
+    org.label-schema.vendor="otherguy" \
+    org.label-schema.version="${VERSION}" \
+    org.label-schema.build-date="${BUILD_DATE}" \
+    org.label-schema.description="Cleans up files on Nextcloud S3 storage that are left over from canceled uploads." \
+    org.label-schema.vcs-url="https://github.com/otherguy/nextcloud-cleanup" \
+    org.label-schema.vcs-ref="${VCS_REF}"
 
 ENV VERSION="${VERSION}" \
     BUILD_DATE="${BUILD_DATE}" \
