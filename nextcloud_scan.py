@@ -16,7 +16,7 @@ from subprocess import run
 
 NC_PATH = '/var/www/nextcloud'
 WEB_USER = 'nextcloud'
-NEXTCLOUD_OCC = "sudo -u nextcloud php --define apc.enable_cli=1 /var/www/nextcloud/occ"
+NEXTCLOUD_OCC = ["sudo", "-u", "nextcloud", "php", "--define", "apc.enable_cli=1", "/var/www/nextcloud/occ"]
 
 # --- MONKEY PATCH LIB_OCC ---
 import json
@@ -41,7 +41,7 @@ def get_all_fileids(conn):
 def test_object_via_occ(urn_oid):
     try:
         # Utilisation de lib_nc-occ via _process pour passer l'argument manquant
-        output = run(args=[NEXTCLOUD_OCC, "files:object:get"], capture_output=True, text=True)
+        output = run(args=[*NEXTCLOUD_OCC, "files:object:get", urn_oid], capture_output=True, text=True)
         out = output.stdout + " " + output.stderr
         lower = out.lower()
         print(lower)
