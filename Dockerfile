@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the script
 COPY clean.py .
+COPY nextcloud_scan.py .
 
 # Build arguments
 ARG VCS_REF=main
@@ -33,4 +34,4 @@ ENV VERSION="${VERSION}" \
     BUILD_DATE="${BUILD_DATE}" \
     VCS_REF="${VCS_REF}"
 
-ENTRYPOINT ["python", "clean.py"]
+ENTRYPOINT ["python", "nextcloud_scan.py"]
